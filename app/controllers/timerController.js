@@ -42,15 +42,44 @@ const getAllTimer = async (req, res) => {
     }
 }
 
+const updateTimerTotalDuration = async (daySession) => {
+    const timerId = daySession.TimerId;
+    let totalDuration = 0;
+
+    try {
+        const daySessionsResponse = await DaySession.findAll({where: {TimerId: timerId}});
+
+        for(let daySession of daySessionsResponse) {
+            const { dataValues } = daySession;
+            
+            totalDuration += dataValues.duration;
+        }
+    
+        await Timer.update({totalDuration: totalDuration}, { where: { id: timerId }, returning: true, plain: true });
+    } catch(error) {
+        console.log(error);
+    }
+    
+    return totalDuration;
+}
+
 const createDaySession = async (req, res) => {
     const daySession = DaySession.build({
         ...req.body,
     });
 
     try {
-        const dataValues = await daySession.save();
+        const { dataValues } = await daySession.save();
 
-        successMessage.result = dataValues;
+        //Update total duration timer
+        const totalDuration = await updateTimerTotalDuration(dataValues);
+
+        //Sucess message
+        successMessage.result = { 
+            daySession: dataValues,
+            totalDuration: totalDuration
+        };
+
         res.status(status.created).send(successMessage);
     } catch(err) {
         res.status(status.conflict).send(err);
@@ -63,10 +92,15 @@ const updateDaySession = async (req, res) => {
     try {
         //Update day session
         const dataValues = await DaySession.update({duration: newDuration}, { where: {id: idDaySession}, returning: true, plain: true });
-        successMessage.result = dataValues[1];
-
+    
         //Update total duration timer
+        const totalDuration = await updateTimerTotalDuration(dataValues[1]);
         
+        //Success message
+        successMessage.result = { 
+            daySession: dataValues[1],
+            totalDuration: totalDuration
+        };
 
         res.status(status.success).send(successMessage);
     } catch(err) {
